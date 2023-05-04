@@ -1,0 +1,6 @@
+*.vtk
+*.h5
+*.xdmf
+/src/.idea
+/src/__pycache__/
+*.code-workspace
