@@ -57,7 +57,7 @@ def main():
                                   nz = axispts)
     
     #P = ufl.TensorElement('CG', ufl.tetrahedron, 1, symmetry=True)
-    P = ufl.TensorElement('CG',msh.ufl_cell(),2,symmetry=True)
+    P = ufl.TensorElement('CG',msh.ufl_cell(),1,symmetry=True)
     FS = fem.FunctionSpace(msh,P) #CG == Lagrange
     
     print("T:",T)
@@ -124,15 +124,13 @@ def main():
         xdmf_Q_file = io.XDMFFile(msh.comm, "qtensor.xdmf",'w')
         xdmf_Q_file.write_mesh(msh)
         xdmf_Q_file.write_function(Q,0.0)
-        #vtk_Q_file = io.VTKFile(msh.comm, "qtensor.vtk",'w')
-        #vtk_Q_file.write_mesh(msh,0.0)
         print("Initial state written")
         xdmf_Q_file.close()
 
     # defining some constants
-    A = fem.Constant(msh,PETSc.ScalarType(1.0))
-    B = fem.Constant(msh, PETSc.ScalarType(1.0))
-    C = fem.Constant(msh, PETSc.ScalarType(1.0))
+    A = fem.Constant(msh,PETSc.ScalarType(-0.064))
+    B = fem.Constant(msh, PETSc.ScalarType(-1.57))
+    C = fem.Constant(msh, PETSc.ScalarType(1.29))
     L = fem.Constant(msh, PETSc.ScalarType(1.0))
     k = fem.Constant(msh, PETSc.ScalarType(dt))
 
