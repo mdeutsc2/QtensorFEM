@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 
 nsteps = 50
 dims = (0,0,0,1.0,1.0,0.5)
-dt = 1e-3#T/nsteps
+dt = 1e-4#T/nsteps
 T = nsteps*dt
 isave = True
 debug = False
@@ -22,7 +22,7 @@ def vtk_eig(filename,nsteps):
         it = 0
         for k in tqdm(range(reader.num_steps)):
             t,point_data, cell_data = reader.read_data(k)
-            data = point_data['f']
+            data = point_data['Q']
             eig_data=np.zeros((data.shape[0],3))
             Q_data = np.zeros((data.shape[0],3,3))
             for p in range(data.shape[0]):
@@ -73,15 +73,15 @@ def main():
     gmsh.model.mesh.generate(gdim)
     #gmsh.write("input_mesh.msh")
     msh,cell_markers,facet_markers = io.gmshio.model_to_mesh(gmsh.model,MPI.COMM_WORLD,0,gdim=gdim)
-    print("GMSH DONE")
+    print("-"*12,"GMSH DONE","-"*12)
     
     x = ufl.SpatialCoordinate(msh) 
     msh.topology.create_connectivity(msh.topology.dim-1,msh.topology.dim) #linking lists of cells/nodes/faces
     #P = ufl.TensorElement('CG', ufl.tetrahedron, 1, symmetry=True)
-    P = ufl.TensorElement('DG',msh.ufl_cell(),1,symmetry=True)
+    P = ufl.TensorElement('CG',msh.ufl_cell(),1,symmetry=True)
     FS = fem.FunctionSpace(msh,P) #CG == Lagrange
-    EFS = fem.FunctionSpace(msh,("DG",4)) # function space for energy
-    BFS = fem.FunctionSpace(msh,("DG",4)) # function space for biaxiality parameter
+    EFS = fem.FunctionSpace(msh,("CG",4)) # function space for energy
+    BFS = fem.FunctionSpace(msh,("CG",4)) # function space for biaxiality parameter
 
     #P2 = ufl.VectorElement('CG',msh.ufl_cell(),1)
     #EFS = fem.VectorFunctionSpace(msh,P)
@@ -131,19 +131,6 @@ def main():
         values[8] = -values[0]-values[4]
         return values
 
-    def initQ2d_rand(x):
-        values = np.zeros((2*2,x.shape[1]),dtype=np.float64)
-        n = np.zeros((2,x[0].shape[0]))
-        polar_angle = np.arccos(np.random.uniform(-1,1,x[0].shape))
-        azi_angle = np.random.uniform(0,2*np.pi)
-        n[0,:] = np.sin(polar_angle)*np.cos(azi_angle)
-        n[1,:] = np.sin(polar_angle)*np.sin(azi_angle)
-        values[0] = S0*(n[0,:]*n[0,:]-1/3)
-        values[1] = S0*(n[0,:]*n[1,:])
-        values[2] = S0*(n[0,:]*n[0,:]-1/3)
-        values[3] = S0*(n[0,:]*n[1,:])
-        return values
-
     def initQ3d_defects(x):
         values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
         n = np.zeros((3,x.shape[1]))
@@ -167,6 +154,7 @@ def main():
     Q = fem.Function(FS) # current time-step result
     Q.name = "Q"
     Q_n = fem.Function(FS) # previous time-step result
+    Q_n.name = "Q"
     V = ufl.TestFunction(FS) # test function to weight calcuations through the lattice
     #E = fem.Function(EFS) # energy function
 
