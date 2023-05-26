@@ -4,3 +4,5 @@
 /src/.idea
 /src/__pycache__/
 *.code-workspace
+*.avi
+src/relax_slab_1e4/.DS_Store

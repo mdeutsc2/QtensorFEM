@@ -7,9 +7,9 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from tqdm.auto import tqdm
 
-nsteps = 150
-dims = (0,0,0,2.5,2.5,0.5)
-dt = 1e-4#T/nsteps
+nsteps = 50
+dims = (0,0,0,1.0,1.0,0.5)
+dt = 1e-3#T/nsteps
 T = nsteps*dt
 isave = True
 debug = False
@@ -34,16 +34,6 @@ def vtk_eig(filename,nsteps):
             vtk_filename = "director"+str(it).zfill(len(str(nsteps))).replace('.','')+'.vtk'
             new_mesh.write(vtk_filename)
             it += 1
-
-# def vtk_energy(filename,nsteps):
-#     with meshio.xdmf.TimeSeriesReader(filename) as reader:
-#         points,cells = reader.read_points_cells()
-#         it = 0
-#         for k in tqdm(range(reader.num_steps)):
-#             t,point_data,cell_data = reader.read_data(k)
-#             data = point_data['E']
-            
-
 
 def xdmf_eig(filename,nsteps):
     #reader = meshio.xdmf.TimeSeriesReader(filename)
@@ -70,23 +60,6 @@ def xdmf_eig(filename,nsteps):
                 it += 1
 
 def main():
-    # Sub domain for Periodic boundary condition
-    # class PeriodicBoundary(SubDomain):
-
-    #     # Left boundary is "target domain"
-    #     def inside(self, x, on_boundary):
-    #         return bool(x[0] < DOLFIN_EPS and x[0] > -DOLFIN_EPS and on_boundary)
-
-    #     # Map right boundary to left boundary
-    #     def map(self, x, y):
-    #         y[0] = x[0] - 1.0
-    #         y[1] = x[1]
-    # # define a mesh
-    # # msh = mesh.create_unit_square(comm = MPI.COMM_WORLD,
-    # #                               nx = axispts,
-    # #                               ny = axispts)
-    # pbc = PeriodicBoundary()
-
     if (debug):
         log.set_log_level(log.LogLevel.INFO)
 
@@ -95,24 +68,20 @@ def main():
     gmsh.model.occ.synchronize()
     gdim = 3
     gmsh.model.addPhysicalGroup(gdim, [domain], 1)
-    gmsh.option.setNumber("Mesh.CharacteristicLengthMin",0.1)
-    gmsh.option.setNumber("Mesh.CharacteristicLengthMax",0.1)
+    gmsh.option.setNumber("Mesh.CharacteristicLengthMin",0.05)
+    gmsh.option.setNumber("Mesh.CharacteristicLengthMax",0.05)
     gmsh.model.mesh.generate(gdim)
     #gmsh.write("input_mesh.msh")
     msh,cell_markers,facet_markers = io.gmshio.model_to_mesh(gmsh.model,MPI.COMM_WORLD,0,gdim=gdim)
     print("GMSH DONE")
-    exit()
-    #msh = mesh.create_unit_cube(comm = MPI.COMM_WORLD,
-    #                              nx = axispts,
-    #                              ny = axispts,
-    #                              nz = axispts)
+    
     x = ufl.SpatialCoordinate(msh) 
     msh.topology.create_connectivity(msh.topology.dim-1,msh.topology.dim) #linking lists of cells/nodes/faces
     #P = ufl.TensorElement('CG', ufl.tetrahedron, 1, symmetry=True)
-    P = ufl.TensorElement('CG',msh.ufl_cell(),2,symmetry=True)
+    P = ufl.TensorElement('DG',msh.ufl_cell(),1,symmetry=True)
     FS = fem.FunctionSpace(msh,P) #CG == Lagrange
-    EFS = fem.FunctionSpace(msh,("CG",4)) # function space for energy
-    BFS = fem.FunctionSpace(msh,("CG",4)) # function space for biaxiality parameter
+    EFS = fem.FunctionSpace(msh,("DG",4)) # function space for energy
+    BFS = fem.FunctionSpace(msh,("DG",4)) # function space for biaxiality parameter
 
     #P2 = ufl.VectorElement('CG',msh.ufl_cell(),1)
     #EFS = fem.VectorFunctionSpace(msh,P)
@@ -178,9 +147,9 @@ def main():
     def initQ3d_defects(x):
         values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
         n = np.zeros((3,x.shape[1]))
-        theta = np.zeros((axispts,axispts))
-        w = 0.11 # defect spacing
-        theta = 0.5*np.arctan(x[1]/(x[0]+w/2))-0.5*np.arctan(x[1]/(x[0]-w/2)) + 0.5*np.pi
+        #theta = np.zeros((axispts,axispts))
+        w = 1.0 # defect spacing
+        theta = 0.5*np.arctan2(x[1]-w/2,x[0]-0.25*w)-0.5*np.arctan2(x[1]-w/2,x[0]-0.75*w) + np.pi/2
         n[0,:] = np.cos(theta)
         n[1,:] = np.sin(theta)
         n[2,:] = 0.0
@@ -193,10 +162,8 @@ def main():
         values[6] = values[2]
         values[7] = values[1]
         values[8] = -values[0]-values[4]
-        print(theta.shape)
         return values
-
-
+    
     Q = fem.Function(FS) # current time-step result
     Q.name = "Q"
     Q_n = fem.Function(FS) # previous time-step result
@@ -210,7 +177,6 @@ def main():
     #print("len(x.array[:] ", len(Q.x.array[:]))
     print("DOF coords: ",FS.tabulate_dof_coordinates().shape)
     print("Global size: ",FS.dofmap.index_map.size_global)
-    #exit()
     # setting up Dirichlet boundary conditions
 
     # setting up for all boundaries
@@ -225,18 +191,19 @@ def main():
     Q_bc_right = fem.Function(FS)
     Q_bc_back = fem.Function(FS)
     Q_bc_front = fem.Function(FS)
+
     Q_bc_top.interpolate(initQ3d_anch)
-    Q_bc_bot.interpolate(initQ3d_anch)
+    Q_bc_bot.interpolate(initQ3d_defects)
     Q_bc_left.interpolate(initQ3d_anch)
     Q_bc_right.interpolate(initQ3d_anch)
     Q_bc_front.interpolate(initQ3d_anch)
     Q_bc_back.interpolate(initQ3d_anch)
 
     dofs_top = fem.locate_dofs_geometrical(FS, lambda x: np.isclose(x[2],dims[5])) # note: these only work for the unit cube
-    dofs_bot = fem.locate_dofs_geometrical(FS, lambda x: np.isclose(x[2],0))
-    dofs_left = fem.locate_dofs_geometrical(FS, lambda x: np.isclose(x[0],0))
+    dofs_bot = fem.locate_dofs_geometrical(FS, lambda x: np.isclose(x[2],dims[2]))
+    dofs_left = fem.locate_dofs_geometrical(FS, lambda x: np.isclose(x[0],dims[0]))
     dofs_right = fem.locate_dofs_geometrical(FS, lambda x: np.isclose(x[0],dims[3]))
-    dofs_front = fem.locate_dofs_geometrical(FS, lambda x: np.isclose(x[1],0))
+    dofs_front = fem.locate_dofs_geometrical(FS, lambda x: np.isclose(x[1],dims[1]))
     dofs_back = fem.locate_dofs_geometrical(FS, lambda x: np.isclose(x[1],dims[4]))
     # X -> left_bc,right_bc
     # Y -> front_bc,back_bc
@@ -249,7 +216,6 @@ def main():
     back_bc = fem.dirichletbc(Q_bc_back, dofs_back)
 
     bcs = [top_bc,bottom_bc,left_bc,right_bc,front_bc,back_bc]
-
     # defining some constants
     # Zumer constants from Hydrodtnamics of pair-annihilating disclination lines in nematic liquid crystals
     # A = fem.Constant(msh,PETSc.ScalarType(-0.064))
@@ -325,6 +291,8 @@ def main():
     it = 0
     istep = 0
     elapsed_time = 0
+    elapsed_calc_time = 0
+    elapsed_io_time = 0
     Q_n.x.array[:] = Q.x.array[:]
     while (t < T):
         t += dt
@@ -336,28 +304,32 @@ def main():
         E.interpolate(E_fn)
         Biax.interpolate(Biax_fn)
         totalE = np.sum(E.x.array[:])
+        it += r[0]
+        elapsed_calc_time += time.time() - start_time
         #if ((isave == True) and (int(t/dt)%10 == 0)):
         if (isave==True):
+            io_start_time = time.time()
             xdmf_Q_file.write_function(Q_n,t)
             xdmf_E_file.write_function(E,t)
             xdmf_B_file.write_function(Biax,t)
             print("Saving at step ",int(t/dt))
+            elapsed_io_time += time.time()-io_start_time
             #vtk_Q_file.write_function(Q_n,t)
         elapsed_time += time.time()-start_time
-        #E = assemble(F2+F3)
-        it += r[0]
         if it/elapsed_time < 1.0:
-            print(f"Step {int(t/dt)}/{nsteps}:\tTotal Energy:{totalE} dE:{prevE-totalE} \t {elapsed_time/it}s/iter")
+            print(f"Step {int(t/dt)}/{nsteps}:{r[0]} Total Energy:{round(totalE,3)} dE:{round(prevE-totalE,3)} {round(elapsed_time/it,2)}s/iter")
         else:
-            print(f"Step {int(t/dt)}/{nsteps}:\tTotal Energy:{totalE} dE:{prevE-totalE} \t {it/elapsed_time}iter/s")
+            print(f"Step {int(t/dt)}/{nsteps}:{r[0]} Total Energy:{round(totalE,3)} dE:{round(prevE-totalE,3)} {round(it/elapsed_time,2)}iter/s")
         prevE = totalE
-        #print(f"Step {int(t/dt)}/{nsteps}: num iterations: {r[0]}\t {elapsed_time}s,{it/elapsed_time}it/s \t Energy:{totalE}")
     
     if (isave):
         #xdmf_Q_file.write_function(Q_n,T)
         xdmf_Q_file.close()
+        xdmf_E_file.close()
+        xdmf_B_file.close()
     print("Done!")
     print("Total time: ",elapsed_time)
+    print("Calc: ",round((elapsed_calc_time/elapsed_time)*100,1),"% IO: ",round((elapsed_io_time/elapsed_time)*100,1),"%")
     print("Total steps: ",nsteps)
     print("Total iterations: ",it)
     if (isave):
