@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 
 nsteps = 50
 dims = (0,0,0,1.0,1.0,0.5)
-dt = 1e-4#T/nsteps
+dt = 1e-3#T/nsteps
 T = nsteps*dt
 isave = True
 debug = False
@@ -131,12 +131,33 @@ def main():
         values[8] = -values[0]-values[4]
         return values
 
-    def initQ3d_defects(x):
+    def initQ3d_2defects(x):
         values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
         n = np.zeros((3,x.shape[1]))
         #theta = np.zeros((axispts,axispts))
         w = 1.0 # defect spacing
         theta = 0.5*np.arctan2(x[1]-w/2,x[0]-0.25*w)-0.5*np.arctan2(x[1]-w/2,x[0]-0.75*w) + np.pi/2
+        n[0,:] = np.cos(theta)
+        n[1,:] = np.sin(theta)
+        n[2,:] = 0.0
+        values[0] = S0*(n[0,:]*n[0,:]-1/3)
+        values[1] = S0*(n[0,:]*n[1,:])
+        values[2] = S0*(n[0,:]*n[2,:])
+        values[3] = S0*(n[1,:]*n[0,:])
+        values[4] = S0*(n[1,:]*n[1,:]-1/3)
+        values[5] = values[3]
+        values[6] = values[2]
+        values[7] = values[1]
+        values[8] = -values[0]-values[4]
+        return values
+
+    def initQ3d_1defect(x):
+        values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
+        n = np.zeros((3,x.shape[1]))
+        #theta = np.zeros((axispts,axispts))
+        w = 1.0 # defect spacing
+        theta = -0.5*np.arctan2(x[1]-w/2,x[0]-0.5*w) + np.pi
+        #theta = 0.5*np.arctan2(x[1]-w/2,x[0]-0.25*w)-0.5*np.arctan2(x[1]-w/2,x[0]-0.75*w) + np.pi/2
         n[0,:] = np.cos(theta)
         n[1,:] = np.sin(theta)
         n[2,:] = 0.0
@@ -180,8 +201,8 @@ def main():
     Q_bc_back = fem.Function(FS)
     Q_bc_front = fem.Function(FS)
 
-    Q_bc_top.interpolate(initQ3d_anch)
-    Q_bc_bot.interpolate(initQ3d_defects)
+    Q_bc_top.interpolate(initQ3d_1defect)
+    Q_bc_bot.interpolate(initQ3d_1defect)
     Q_bc_left.interpolate(initQ3d_anch)
     Q_bc_right.interpolate(initQ3d_anch)
     Q_bc_front.interpolate(initQ3d_anch)
@@ -203,7 +224,7 @@ def main():
     front_bc = fem.dirichletbc(Q_bc_front, dofs_front)
     back_bc = fem.dirichletbc(Q_bc_back, dofs_back)
 
-    bcs = [top_bc,bottom_bc,left_bc,right_bc,front_bc,back_bc]
+    bcs = [top_bc,bottom_bc]#,left_bc,right_bc,front_bc,back_bc]
     # defining some constants
     # Zumer constants from Hydrodtnamics of pair-annihilating disclination lines in nematic liquid crystals
     # A = fem.Constant(msh,PETSc.ScalarType(-0.064))
