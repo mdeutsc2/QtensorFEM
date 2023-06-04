@@ -8,7 +8,7 @@ from petsc4py import PETSc
 from tqdm.auto import tqdm
 
 nsteps = 50
-dims = (0,0,0,1.0,1.0,0.5)
+dims = (0,0,0,2.5,2.5,0.5)
 dt = 1e-3#T/nsteps
 T = nsteps*dt
 isave = True
@@ -155,7 +155,7 @@ def main():
         values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
         n = np.zeros((3,x.shape[1]))
         #theta = np.zeros((axispts,axispts))
-        w = 1.0 # defect spacing
+        w = 2.5 # defect spacing
         theta = -0.5*np.arctan2(x[1]-w/2,x[0]-0.5*w) + np.pi
         #theta = 0.5*np.arctan2(x[1]-w/2,x[0]-0.25*w)-0.5*np.arctan2(x[1]-w/2,x[0]-0.75*w) + np.pi/2
         n[0,:] = np.cos(theta)
