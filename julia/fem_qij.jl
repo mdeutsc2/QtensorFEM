@@ -261,7 +261,7 @@ while t < T
         ddQ = OffsetArray{Float64}(0.0,1:4,0:4)
         for (i,inode) in enumerate(icell.nodes)
             ddQ[i,0] -= vol*((2*a2*M[2,i])+(2*a3*M[3,i])+(2*a4*M[4,i])+(b2*M[2,i])+(b3*M[3,i])+(b4*M[4,i]))
-            ddQ[i,1] -= vol*((2*b2*M[2,i]))+(2*b3*M[3,i])+(2*b4*M[4,i] +(a2*M[2,i])+(a3*M[3,i])+(a4*M[4,i]))
+            ddQ[i,1] -= vol*((2*b2*M[2,i]))+(2*b3*M[3,i])+(2*b4*M[4,i]+(a2*M[2,i])+(a3*M[3,i])+(a4*M[4,i]))
             ddQ[i,2] -= 2*vol*((c2*M[2,1])+(c3*M[3,1])+(c4*M[4,1])) 
             ddQ[i,3] -= 2*vol*((d2*M[2,1])+(d3*M[3,1])+(d4*M[4,1])) 
             ddQ[i,4] -= 2*vol*((e2*M[2,1])+(e3*M[3,1])+(e4*M[4,1]))

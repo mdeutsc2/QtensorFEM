@@ -395,3 +395,9 @@ class RelaxationQij3DTensor(object):
         if (self.isave[0]):
             print("converting Q-tensor to director field")
             qij_io.vtk_eig("qtensor.xdmf",self.nsteps)
+
+class RelaxationQij3DMixed(object):
+    pass
+
+class DynamicQij3DTensor(object):
+    pass
