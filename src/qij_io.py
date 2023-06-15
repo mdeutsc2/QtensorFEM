@@ -1,5 +1,19 @@
 import meshio
 import numpy as np
+import dolfinx.io
+from mpi4py import MPI
+from tqdm.auto import tqdm
+
+def load_restart(filename):
+    print(filename)
+    xdmf = dolfinx.io.XDMFFile(MPI.COMM_WORLD,filename,"r")
+    msh = xdmf.read_mesh()
+    xdmf.close()
+    with meshio.xdmf.TimeSeriesReader(filename) as reader:
+        points,cells = reader.read_points_cells()
+        t,point_data,cell_data = reader.read_data(reader.num_steps-1)
+        Func_data = point_data['Q']
+    return msh,Func_data
 
 def vtk_eig(filename,nsteps):
     ''' function to read in tensor xdmf files and write director to individial vtk files'''
