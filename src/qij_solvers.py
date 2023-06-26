@@ -445,7 +445,7 @@ class RelaxationQij3DTensor(object):
             totalE = np.sum(self.E.x.array[:])
             it += r[0]
 
-            if self.dyn_bc and int(self.t/self.dt) == 25: #only update boundaries if twist/dynamic boundary is specified
+            if self.dyn_bc and int(self.t/self.dt) > 25: #only update boundaries if twist/dynamic boundary is specified
                 self.t_bc.value += self.dt
                 Q_bc_top.interpolate(twistBC(self.t_bc,self.dt,self.n_anch,self.n_twistrate,self.S0))
                 bcs_local = [Q_bc_top,Q_bc_bot]

@@ -13,7 +13,7 @@ B = -12.3
 C = 10
 L = 2.32
 theta = 1 #time-step family, theta=1 -> backwards Euler, theta=0.5 -> Crank-Nicholson, theta = 0 -> forwards Euler
-bc = {'top':{'twist':((1,0,0),90)}, # initial anchoring, twist/step in deg
+bc = {'top':{'twist':((1,0,0),0.9)}, # initial anchoring, twist/step in deg
       'bot':{'defect':(2,0.16)}} # number of defects, spacing
 # bc = {'top':{'anch':(1,0,0)},
 #       'bot':{'defect':(2,0.16)}}
