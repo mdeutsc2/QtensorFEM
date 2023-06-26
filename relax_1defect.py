@@ -1,11 +1,11 @@
 from src import qij_solvers
 
-name = "hydro_1defect"
+name = "relax_1defect"
 nsteps = 50
 dims = (0,0,0,2.5,2.5,0.5)
 delta = 0.05
 dt = 1e-3
-isave = (False,1) # saves every step
+isave = (True,1) # saves every step
 S0 = 0.53 # order parameter
 A = -1
 B = -12.3
@@ -16,9 +16,7 @@ bc = {'top':{'defect':1},
       'bot':{'defect':1}}
 
 
-#sim = qij_solvers.RelaxationQij3DTensor(name,dims,0.05,nsteps,dt,isave)
-sim = qij_solvers.BerisEdwardsQij3DTensor(name,dims,0.05,nsteps,dt,isave)
+sim = qij_solvers.RelaxationQij3DTensor(name,dims,0.05,nsteps,dt,isave)
 print(type(sim))
 sim.initialize(A,B,C,L,S0)
-exit()
 sim.run(boundary_conditions=bc)

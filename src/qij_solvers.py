@@ -26,6 +26,8 @@ class RelaxationQij3DTensor(object):
 
         # CLASS VARIABLES
         self.T = self.nsteps*self.dt
+        self.t = None
+        self.t_bc = None
         self.msh = None # empty class variables
         self.FS = None
         self.energy_FS = None
@@ -42,7 +44,7 @@ class RelaxationQij3DTensor(object):
         self.S0 = None
         self.bcs = None
         self.n_anch = None # kludge to get around no interpolation arguments
-        self.w = None # defect spacing parameter (again, kludge)
+        self.dyn_bc = False
         self.Q_restart = None
     
     def initialize(self,A,B,C,L,S0,restart=(False,"")):
@@ -165,46 +167,83 @@ class RelaxationQij3DTensor(object):
             values[7] = values[1]
             values[8] = -values[0]-values[4]
             return values
+            
+        class Two_Defects():
+            def __init__(self,w,l,S0):
+                self.w = w # defect spacing
+                self.l = l # size of square simulation
+                self.S0 = S0
+                self.theta = None
+                self.n = None
+            def __call__(self,x):
+                values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
+                self.n = np.zeros((3,x.shape[1]))
+                #theta = np.zeros((axispts,axispts))
+                self.theta = 0.5*np.arctan2(x[1]-self.l/2,x[0]-self.l/2+self.w/2)-0.5*np.arctan2(x[1]-self.l/2,x[0]-self.l/2-self.w/2)+np.pi/2
+                self.n[0,:] = np.cos(self.theta)
+                self.n[1,:] = np.sin(self.theta)
+                self.n[2,:] = 0.0
+                values[0] = self.S0*(self.n[0,:]*self.n[0,:]-1/3)
+                values[1] = self.S0*(self.n[0,:]*self.n[1,:])
+                values[2] = self.S0*(self.n[0,:]*self.n[2,:])
+                values[3] = self.S0*(self.n[1,:]*self.n[0,:])
+                values[4] = self.S0*(self.n[1,:]*self.n[1,:]-1/3)
+                values[5] = values[3]
+                values[6] = values[2]
+                values[7] = values[1]
+                values[8] = -values[0]-values[4]
+                return values
 
-        def initQ3d_2defects(x):
-            values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
-            n = np.zeros((3,x.shape[1]))
-            #theta = np.zeros((axispts,axispts))
-            theta = 0.5*np.arctan2(x[1]-self.w/2,x[0]-0.25*self.w)-0.5*np.arctan2(x[1]-self.w/2,x[0]-0.75*self.w) + np.pi/2
-            n[0,:] = np.cos(theta)
-            n[1,:] = np.sin(theta)
-            n[2,:] = 0.0
-            values[0] = self.S0*(n[0,:]*n[0,:]-1/3)
-            values[1] = self.S0*(n[0,:]*n[1,:])
-            values[2] = self.S0*(n[0,:]*n[2,:])
-            values[3] = self.S0*(n[1,:]*n[0,:])
-            values[4] = self.S0*(n[1,:]*n[1,:]-1/3)
-            values[5] = values[3]
-            values[6] = values[2]
-            values[7] = values[1]
-            values[8] = -values[0]-values[4]
-            return values
 
-        def initQ3d_1defect(x):
-            values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
-            n = np.zeros((3,x.shape[1]))
-            #theta = np.zeros((axispts,axispts))
-            w = 2.5 # defect spacing
-            theta = -0.5*np.arctan2(x[1]-self.w/2,x[0]-0.5*self.w) + np.pi
-            #theta = 0.5*np.arctan2(x[1]-w/2,x[0]-0.25*w)-0.5*np.arctan2(x[1]-w/2,x[0]-0.75*w) + np.pi/2
-            n[0,:] = np.cos(theta)
-            n[1,:] = np.sin(theta)
-            n[2,:] = 0.0
-            values[0] = self.S0*(n[0,:]*n[0,:]-1/3)
-            values[1] = self.S0*(n[0,:]*n[1,:])
-            values[2] = self.S0*(n[0,:]*n[2,:])
-            values[3] = self.S0*(n[1,:]*n[0,:])
-            values[4] = self.S0*(n[1,:]*n[1,:]-1/3)
-            values[5] = values[3]
-            values[6] = values[2]
-            values[7] = values[1]
-            values[8] = -values[0]-values[4]
-            return values
+        # def initQ3d_1defect(x): TODO FIXME
+        #     values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
+        #     n = np.zeros((3,x.shape[1]))
+        #     #theta = np.zeros((axispts,axispts))
+        #     w = 2.5 # defect spacing
+        #     theta = -0.5*np.arctan2(x[1]-self.w/2,x[0]-0.5*self.w) + np.pi
+        #     #theta = 0.5*np.arctan2(x[1]-w/2,x[0]-0.25*w)-0.5*np.arctan2(x[1]-w/2,x[0]-0.75*w) + np.pi/2
+        #     n[0,:] = np.cos(theta)
+        #     n[1,:] = np.sin(theta)
+        #     n[2,:] = 0.0
+        #     values[0] = self.S0*(n[0,:]*n[0,:]-1/3)
+        #     values[1] = self.S0*(n[0,:]*n[1,:])
+        #     values[2] = self.S0*(n[0,:]*n[2,:])
+        #     values[3] = self.S0*(n[1,:]*n[0,:])
+        #     values[4] = self.S0*(n[1,:]*n[1,:]-1/3)
+        #     values[5] = values[3]
+        #     values[6] = values[2]
+        #     values[7] = values[1]
+        #     values[8] = -values[0]-values[4]
+        #     return values
+
+        class twistBC():
+            def __init__(self,t,dt,anch,twistrate,S0):
+                self._t = t
+                self.dt = dt
+                self.nx = anch[0]
+                self.ny = anch[1]
+                self.nz = anch[2]
+                self.twist = np.radians(twistrate)
+                self.S0 = S0
+                self.s = None
+            def __call__(self,x):
+                values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
+                self.nx = ufl.cos(self.twist*((self._t/self.dt)-50))
+                self.ny = ufl.sin(self.twist*((self._t/self.dt)-50))
+                #print(self.nx,self.ny)
+                self.s = ufl.sqrt(self.nx*self.nx + self.ny*self.ny) #this must be ufl instead of numpy
+                self.nx = self.nx/self.s
+                self.ny = self.ny/self.s
+                values[0] = self.S0*(self.nx*self.nx-1/3)
+                values[1] = self.S0*(self.nx*self.ny)
+                values[2] = self.S0*(self.nx*self.nz)
+                values[3] = self.S0*(self.ny*self.nx)
+                values[4] = self.S0*(self.ny*self.ny-1/3)
+                values[5] = values[3]
+                values[6] = values[2]
+                values[7] = values[1]
+                values[8] = -values[0]-values[4]
+                return values
 
         # setting up for all boundaries
         # X -> left_bc,right_bc
@@ -219,17 +258,25 @@ class RelaxationQij3DTensor(object):
                     if self.dims[3] != self.dims[4]:
                         print("substrate must be square for defects")
                         exit()
-                    self.w = self.dims[3]
-                    if self.bcs['top']['defect'] == 1:
+                    if len(self.bcs['top']['defect']) == 1:
                         Q_bc_top.interpolate(initQ3d_1defect)
-                    elif self.bcs['top']['defect'] == 2:
-                        Q_bc_top.interpolate(initQ3d_2defects)
+                    elif len(self.bcs['top']['defect']) > 1:
+                        if self.bcs['top']['defect'][0] == 2:
+                            w = self.bcs['top']['defect'][1]
+                            Q_bc_top_class = Two_Defects(w,self.dims[3],self.S0)
+                            Q_bc_top.interpolate(Q_bc_top_class)
                     else:
                         print("ndefects not specified correctly")
                         exit()
                 elif 'anch' in self.bcs['top']:
                     self.n_anch = self.bcs['top']['anch']
                     Q_bc_top.interpolate(initQ3d_anch)
+                elif 'twist' in self.bcs['top']:
+                    self.dyn_bc = True
+                    self.n_anch = self.bcs['top']['twist'][0]
+                    self.n_twistrate = self.bcs['top']['twist'][1]
+                    Q_bc_top_class = twistBC(0.0,self.dt,self.n_anch,self.n_twistrate,self.S0)
+                    Q_bc_top.interpolate(Q_bc_top_class)
 
                 top_bc = fem.dirichletbc(Q_bc_top, fem.locate_dofs_geometrical(self.FS, lambda x: np.isclose(x[2],self.dims[5])))
                 bcs_local.append(top_bc)
@@ -240,11 +287,13 @@ class RelaxationQij3DTensor(object):
                     if self.dims[3] != self.dims[4]:
                         print("substrate must be square for defects")
                         exit()
-                    self.w = self.dims[3]
-                    if self.bcs['bot']['defect'] == 1:
+                    if len(self.bcs['bot']['defect']) == 1:
                         Q_bc_bot.interpolate(initQ3d_1defect)
-                    elif self.bcs['bot']['defect'] == 2:
-                        Q_bc_bot.interpolate(initQ3d_2defects)
+                    elif len(self.bcs['bot']['defect']) > 1:
+                        if self.bcs['bot']['defect'][0] == 2:
+                            w = self.bcs['bot']['defect'][1]
+                            Q_bc_bot_class = Two_Defects(w,self.dims[3],self.S0)
+                            Q_bc_bot.interpolate(Q_bc_bot_class)
                     else:
                         print("ndefects not specified correctly")
                         exit()
@@ -327,6 +376,7 @@ class RelaxationQij3DTensor(object):
                               (self.B/3)*ufl.tr(self.Q*self.Q*self.Q) + 
                               0.25*self.C*ufl.tr(self.Q*self.Q)*ufl.tr(self.Q*self.Q) + 
                               0.5*self.L*ufl.inner(ufl.grad(self.Q),ufl.grad(self.Q)),self.energy_FS.element.interpolation_points())
+        E_fn = fem.Expression(0.5*self.L*ufl.inner(ufl.grad(self.Q),ufl.grad(self.Q)),self.energy_FS.element.interpolation_points())
         self.E = fem.Function(self.energy_FS)
         self.E.name = "E"
         self.E.interpolate(E_fn)
@@ -341,17 +391,17 @@ class RelaxationQij3DTensor(object):
 
         # writing initial conditions to file
         if (self.isave[0]):
-            Q_file_name = self.sim_name + "_qtensor.xdmf"
+            Q_file_name = "./data/"+self.sim_name+"/"+self.sim_name + "_qtensor.xdmf"
             xdmf_Q_file = io.XDMFFile(self.msh.comm, Q_file_name,'w')
             xdmf_Q_file.write_mesh(self.msh)
             xdmf_Q_file.write_function(self.Q,0.0)
 
-            E_file_name = self.sim_name + "_energy.xdmf"
+            E_file_name = "./data/"+self.sim_name+"/"+self.sim_name + "_energy.xdmf"
             xdmf_E_file = io.XDMFFile(self.msh.comm, E_file_name, 'w')
             xdmf_E_file.write_mesh(self.msh)
             xdmf_E_file.write_function(self.E,0.0)
 
-            Biax_file_name = self.sim_name + "_biaxiality.xdmf"
+            Biax_file_name = "./data/"+self.sim_name+"/"+self.sim_name + "_biaxiality.xdmf"
             xdmf_B_file = io.XDMFFile(self.msh.comm, Biax_file_name, 'w')
             xdmf_B_file.write_mesh(self.msh)
             xdmf_B_file.write_function(self.Biax,0.0)
@@ -377,39 +427,46 @@ class RelaxationQij3DTensor(object):
 
         #step in time
         print("Init done")
-        t = 0.0
-        it = 0
-        istep = 0
-        elapsed_time = 0
-        elapsed_calc_time = 0
-        elapsed_io_time = 0
+        self.t_bc = fem.Constant(self.msh, PETSc.ScalarType(0.0))
+        self.t = 0.0
+        it, istep, elapsed_time,elapsed_calc_time,elapsed_io_time = qij_io.start_timers()
         self.Q_n.x.array[:] = self.Q.x.array[:]
-        while (t < self.T):
-            t += self.dt
+        while (self.t < self.T):
+            self.t += self.dt
             istep += 1
             start_time = time.time()
+            
             r = solver.solve(self.Q)
+
             self.Q.x.scatter_forward()
             self.Q_n.x.array[:] = self.Q.x.array #swapping old timestep for new timestep
             self.E.interpolate(E_fn)
             self.Biax.interpolate(Biax_fn)
             totalE = np.sum(self.E.x.array[:])
             it += r[0]
+
+            if self.dyn_bc and int(self.t/self.dt) == 25: #only update boundaries if twist/dynamic boundary is specified
+                self.t_bc.value += self.dt
+                Q_bc_top.interpolate(twistBC(self.t_bc,self.dt,self.n_anch,self.n_twistrate,self.S0))
+                bcs_local = [Q_bc_top,Q_bc_bot]
+
             elapsed_calc_time += time.time() - start_time
-            if ((self.isave[0] == True) and (int(t/self.dt)%self.isave[1] == 0)):
+            if ((self.isave[0] == True) and (int(self.t/self.dt)%self.isave[1] == 0)):
                 io_start_time = time.time()
-                xdmf_Q_file.write_function(self.Q_n,t)
-                xdmf_E_file.write_function(self.E,t)
-                xdmf_B_file.write_function(self.Biax,t)
-                print("Saving at step ",int(t/self.dt))
+                xdmf_Q_file.write_function(self.Q_n,self.t)
+                xdmf_E_file.write_function(self.E,self.t)
+                xdmf_B_file.write_function(self.Biax,self.t)
+                print("Saving at step ",int(self.t/self.dt))
                 elapsed_io_time += time.time()-io_start_time
                 #vtk_Q_file.write_function(Q_n,t)
             elapsed_time += time.time()-start_time
             if it/elapsed_time < 1.0:
-                print(f"Step {int(t/self.dt)}/{self.nsteps} It:{r[0]} Total Energy:{round(totalE,3)} dE:{round(prevE-totalE,3)} {round(elapsed_time/it,2)}s/iter")
+                print(f"Step {int(self.t/self.dt)}/{self.nsteps} It:{r[0]} Total Energy:{round(totalE,3)} dE:{round(prevE-totalE,3)} {round(elapsed_time/it,2)}s/iter")
             else:
-                print(f"Step {int(t/self.dt)}/{self.nsteps} It:{r[0]} Total Energy:{round(totalE,3)} dE:{round(prevE-totalE,3)} {round(it/elapsed_time,2)}iter/s")
+                print(f"Step {int(self.t/self.dt)}/{self.nsteps} It:{r[0]} Total Energy:{round(totalE,3)} dE:{round(prevE-totalE,3)} {round(it/elapsed_time,2)}iter/s")
             prevE = totalE
+
+
         
         if (self.isave[0]):
             xdmf_Q_file.close()
@@ -422,7 +479,8 @@ class RelaxationQij3DTensor(object):
         print("Total iterations: ",it)
         if (self.isave[0]):
             print("converting Q-tensor to director field")
-            qij_io.vtk_eig(Q_file_name,self.nsteps)
+            path = "./data/"+self.sim_name+"/"
+            qij_io.vtk_eig(path,Q_file_name,self.nsteps)
 
 class RelaxationQij3DMixed(object):
     pass
@@ -447,6 +505,8 @@ class BerisEdwardsQij3DTensor(object):
         self.FS = None
         self.energy_FS = None
         self.biax_FS = None
+        self.S = None
+        self.S_n = None
         # q-tensor fields
         self.Q = None
         self.Q_n = None
@@ -543,30 +603,34 @@ class BerisEdwardsQij3DTensor(object):
         # setting up Finite Element Spaces
         P1 = ufl.TensorElement('CG',self.msh.ufl_cell(),1,symmetry=True)
         P2 = ufl.VectorElement('CG',self.msh.ufl_cell(),1) # vector element for velocity
-        self.FS = fem.FunctionSpace(self.msh,P1)
+        self.FS = fem.FunctionSpace(self.msh,ufl.MixedElement([P1,P2]))
         self.energy_FS = fem.FunctionSpace(self.msh,("CG",1)) # function space for energy
         self.biax_FS = fem.FunctionSpace(self.msh,("CG",1)) # function space for biaxiality parameter
-
+        
         # setting up Functions
-        self.Q = fem.Function(self.FS)
-        self.Q_n = fem.Function(self.FS,name="Q")
-        self.V_q = ufl.TestFunction(self.FS)
+        self.S = fem.Function(self.FS) #current solution
+        self.S_n = fem.Function(self.FS,name="Q") # solution from previous step
+        (Q,u) = ufl.split(self.S) # splitting function space into Qij and velocity, u
+        (Q_n,u_n) = ufl.split(self.S_n)
+        V_q,V_u = ufl.TestFunctions(self.FS)
         self.E = fem.Function(self.energy_FS,name="E")
         self.Biax = fem.Function(self.biax_FS,name="Biaxiality")
+
+        #initializing velocity to zero FIXME
+        self.S.sub(0).x.array[:] = 0.0
         #initializing Q for random director and distributing initial condition
         if self.restart[0]:
-            self.Q.interpolate(initQ3d_restart)
+            self.S.sub(0).interpolate(initQ3d_restart)
         else:
-            self.Q.interpolate(initQ3d_rand)
-        self.Q.x.scatter_forward()
+            self.S.sub(0).interpolate(initQ3d_rand)
+        self.S.x.scatter_forward()
 
         print("=== PARAMETERS ===")
         print("nsteps:",self.nsteps)
         print("dt:",self.dt)
         print("T:",self.T)
         print("A",self.A,"B",self.B,"C",self.C,"L",self.L)
-        print(self.Q.x.array[:].shape)
-        print("DOF coords: ",self.FS.tabulate_dof_coordinates().shape)
+        #print("DOF coords: ",self.FS.tabulate_dof_coordinates().shape)
         print("Global size: ",self.FS.dofmap.index_map.size_global)
 
     def run(self,boundary_conditions={}):
