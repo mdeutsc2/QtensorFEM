@@ -49,6 +49,33 @@ def vtk_eig(path,filename,nsteps):
             new_mesh.write(vtk_filename)
             it += 1
 
+def vtk_eig2(path,filename,nsteps):
+    ''' function to read in tensor xdmf files and write director and scalar order paramter to 
+    individual vtk files'''
+    with meshio.xdmf.TimeSeriesReader(filename) as reader:
+        points,cells = reader.read_points_cells()
+        it = 0
+        for k in tqdm(range(reader.num_steps)):
+            t,point_data,cell_data = reader.read_data(k)
+            data = point_data['Q']
+            eig_data = np.zeros((data.shape[0],3))
+            Q_data = np.zeros((data.shape[0],3,3))
+            S_data = np.zeros(data.shape[0])
+            for p in range(data.shape[0]):
+                Q = np.reshape(data[p,:],(3,3))
+                Q_data[p,:,:] = Q
+                w,v = np.linalg.eig(Q)
+                n = v[:,np.argmax(w)]
+                eig_data[p,:] = n
+                S_data[p] = np.max(w)#1.5*np.dot(n,n)**2 - 0.5
+            Q_mesh = meshio.Mesh(points,cells,point_data={"N": eig_data})
+            vtk_filename = path+"director"+str(it).zfill(len(str(nsteps))).replace('.','')+'.vtk'
+            Q_mesh.write(vtk_filename)
+            S_mesh = meshio.Mesh(points,cells,point_data={"S":S_data})
+            vtk_filename = path+"scalar"+str(it).zfill(len(str(nsteps))).replace('.','')+'.vtk'
+            S_mesh.write(vtk_filename)
+            it += 1
+
 def vtk_biax(path,filename,nsteps):
     ''' functon to read in tensor xdmf files and write biaxiality parameter to individual vtk files'''
     with meshio.xdmf.TimeSeriesReader(filename) as reader:

@@ -194,27 +194,30 @@ class RelaxationQij3DTensor(object):
                 values[8] = -values[0]-values[4]
                 return values
 
-
-        # def initQ3d_1defect(x): TODO FIXME
-        #     values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
-        #     n = np.zeros((3,x.shape[1]))
-        #     #theta = np.zeros((axispts,axispts))
-        #     w = 2.5 # defect spacing
-        #     theta = -0.5*np.arctan2(x[1]-self.w/2,x[0]-0.5*self.w) + np.pi
-        #     #theta = 0.5*np.arctan2(x[1]-w/2,x[0]-0.25*w)-0.5*np.arctan2(x[1]-w/2,x[0]-0.75*w) + np.pi/2
-        #     n[0,:] = np.cos(theta)
-        #     n[1,:] = np.sin(theta)
-        #     n[2,:] = 0.0
-        #     values[0] = self.S0*(n[0,:]*n[0,:]-1/3)
-        #     values[1] = self.S0*(n[0,:]*n[1,:])
-        #     values[2] = self.S0*(n[0,:]*n[2,:])
-        #     values[3] = self.S0*(n[1,:]*n[0,:])
-        #     values[4] = self.S0*(n[1,:]*n[1,:]-1/3)
-        #     values[5] = values[3]
-        #     values[6] = values[2]
-        #     values[7] = values[1]
-        #     values[8] = -values[0]-values[4]
-        #     return values
+        class One_Defect():
+            def __init__(self,l,S0,charge):
+                self.l = l
+                self.S0 = S0
+                self.charge = charge
+                self.theta = None
+                self.n = None
+            def __call__(self,x):
+                values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
+                self.n = np.zeros((3,x.shape[1]))
+                self.theta = -self.charge*np.arctan2(x[1]-0.5*self.l,x[0]-0.5*self.l) + np.pi
+                self.n[0,:] = np.cos(self.theta)
+                self.n[1,:] = np.sin(self.theta)
+                self.n[2,:] = 0.0
+                values[0] = self.S0*(self.n[0,:]*self.n[0,:]-1/3)
+                values[1] = self.S0*(self.n[0,:]*self.n[1,:])
+                values[2] = self.S0*(self.n[0,:]*self.n[2,:])
+                values[3] = self.S0*(self.n[1,:]*self.n[0,:])
+                values[4] = self.S0*(self.n[1,:]*self.n[1,:]-1/3)
+                values[5] = values[3]
+                values[6] = values[2]
+                values[7] = values[1]
+                values[8] = -values[0]-values[4]
+                return values
 
         class twistBC():
             def __init__(self,t,dt,anch,twistrate,S0):
@@ -245,6 +248,30 @@ class RelaxationQij3DTensor(object):
                 values[8] = -values[0]-values[4]
                 return values
 
+        class anchBC():
+            def __init__(self,anch,S0):
+                self.nx = anch[0]
+                self.ny = anch[1]
+                self.nz = anch[2]
+                self.S0 = S0
+                self.s = None
+            def __call__(self,x):
+                values = np.zeros((3*3,x.shape[1]),dtype=np.float64)
+                self.s = ufl.sqrt(self.nx*self.nx + self.ny*self.ny + self.nz*self.nz)
+                self.nx = self.nx/self.s
+                self.ny = self.ny/self.s
+                self.nz = self.nz/self.s
+                values[0] = self.S0*(self.nx*self.nx-1/3)
+                values[1] = self.S0*(self.nx*self.ny)
+                values[2] = self.S0*(self.nx*self.nz)
+                values[3] = self.S0*(self.ny*self.nx)
+                values[4] = self.S0*(self.ny*self.ny-1/3)
+                values[5] = values[3]
+                values[6] = values[2]
+                values[7] = values[1]
+                values[8] = -values[0]-values[4]
+                return values
+
         # setting up for all boundaries
         # X -> left_bc,right_bc
         # Y -> front_bc,back_bc
@@ -258,19 +285,20 @@ class RelaxationQij3DTensor(object):
                     if self.dims[3] != self.dims[4]:
                         print("substrate must be square for defects")
                         exit()
-                    if len(self.bcs['top']['defect']) == 1:
-                        Q_bc_top.interpolate(initQ3d_1defect)
-                    elif len(self.bcs['top']['defect']) > 1:
-                        if self.bcs['top']['defect'][0] == 2:
-                            w = self.bcs['top']['defect'][1]
-                            Q_bc_top_class = Two_Defects(w,self.dims[3],self.S0)
-                            Q_bc_top.interpolate(Q_bc_top_class)
+                    elif self.bcs['top']['defect'][0] == 1:
+                        Q_bc_top_class = One_Defect(self.dims[3],self.S0,self.bcs['top']['defect'][1])
+                        Q_bc_top.interpolate(Q_bc_top_class)
+                    elif self.bcs['top']['defect'][0] == 2:
+                        w = self.bcs['top']['defect'][1]
+                        Q_bc_top_class = Two_Defects(w,self.dims[3],self.S0)
+                        Q_bc_top.interpolate(Q_bc_top_class)
                     else:
-                        print("ndefects not specified correctly")
+                        print("ndefects not specified correctly,top")
                         exit()
                 elif 'anch' in self.bcs['top']:
                     self.n_anch = self.bcs['top']['anch']
-                    Q_bc_top.interpolate(initQ3d_anch)
+                    Q_bc_top_class = anchBC(self.n_anch,self.S0)
+                    Q_bc_top.interpolate(Q_bc_top_class)
                 elif 'twist' in self.bcs['top']:
                     self.dyn_bc = True
                     self.n_anch = self.bcs['top']['twist'][0]
@@ -287,19 +315,20 @@ class RelaxationQij3DTensor(object):
                     if self.dims[3] != self.dims[4]:
                         print("substrate must be square for defects")
                         exit()
-                    if len(self.bcs['bot']['defect']) == 1:
-                        Q_bc_bot.interpolate(initQ3d_1defect)
-                    elif len(self.bcs['bot']['defect']) > 1:
-                        if self.bcs['bot']['defect'][0] == 2:
-                            w = self.bcs['bot']['defect'][1]
-                            Q_bc_bot_class = Two_Defects(w,self.dims[3],self.S0)
-                            Q_bc_bot.interpolate(Q_bc_bot_class)
+                    elif self.bcs['bot']['defect'][0] == 1:
+                        Q_bc_bot_class = One_Defect(self.dims[3],self.S0,self.bcs['bot']['defect'][1])
+                        Q_bc_bot.interpolate(Q_bc_bot_class)
+                    elif self.bcs['bot']['defect'][0] == 2:
+                        w = self.bcs['bot']['defect'][1]
+                        Q_bc_bot_class = Two_Defects(w,self.dims[3],self.S0)
+                        Q_bc_bot.interpolate(Q_bc_bot_class)
                     else:
-                        print("ndefects not specified correctly")
+                        print("ndefects not specified correctly,bottom")
                         exit()
                 elif 'anch' in self.bcs['bot']:
                     self.n_anch = self.bcs['bot']['anch']
-                    Q_bc_bot.interpolate(initQ3d_anch)
+                    Q_bc_bot_class = anchBC(self.n_anch,self.S0)
+                    Q_bc_bot.interpolate(Q_bc_bot_class)
                 bottom_bc = fem.dirichletbc(Q_bc_bot, fem.locate_dofs_geometrical(self.FS, lambda x: np.isclose(x[2],self.dims[2])))
                 bcs_local.append(bottom_bc)
 
@@ -307,7 +336,8 @@ class RelaxationQij3DTensor(object):
                 Q_bc_left = fem.Function(self.FS)
                 if 'anch' in self.bcs['left']:
                     self.n_anch = self.bcs['left']['anch']
-                    Q_bc_left.interpolate(initQ3d_anch)
+                    Q_bc_left_class = anchBC(self.n_anch,self.S0)
+                    Q_bc_left.interpolate(Q_bc_left_class)
                 else:
                     print("defects not supported on left bc")
                 left_bc = fem.dirichletbc(Q_bc_left, fem.locate_dofs_geometrical(self.FS, lambda x: np.isclose(x[0],self.dims[0])))
@@ -317,7 +347,8 @@ class RelaxationQij3DTensor(object):
                 Q_bc_right = fem.Function(self.FS)
                 if 'anch' in self.bcs['right']:
                     self.n_anch = self.bcs['right']['anch']
-                    Q_bc_right.interpolate(initQ3d_anch)
+                    Q_bc_right_class = anchBC(self.n_anch,self.S0)
+                    Q_bc_right.interpolate(Q_bc_right_class)
                 else:
                     print("defects not supported on right bc")
                 right_bc = fem.dirichletbc(Q_bc_right, fem.locate_dofs_geometrical(self.FS, lambda x: np.isclose(x[0],self.dims[3])))
@@ -327,7 +358,8 @@ class RelaxationQij3DTensor(object):
                 Q_bc_back = fem.Function(self.FS)
                 if 'anch' in self.bcs['back']:
                     self.n_anch = self.bcs['back']['anch']
-                    Q_bc_back.interpolate(initQ3d_anch)
+                    Q_bc_back_class = anchBC(self.n_anch,self.S0)
+                    Q_bc_back.interpolate(Q_bc_back_class)
                 else:
                     print("defects not supported on back bc")
                 back_bc = fem.dirichletbc(Q_bc_back, fem.locate_dofs_geometrical(self.FS, lambda x: np.isclose(x[1],self.dims[4])))
@@ -337,7 +369,8 @@ class RelaxationQij3DTensor(object):
                 Q_bc_front = fem.Function(self.FS)
                 if 'anch' in self.bcs['front']:
                     self.n_anch = self.bcs['front']['anch']
-                    Q_bc_front.interpolate(initQ3d_anch)
+                    Q_bc_front_class = anchBC(self.n_anch,self.S0)
+                    Q_bc_front.interpolate(Q_bc_front_class)
                 else:
                     print("defects not supported on front bc")
                 front_bc = fem.dirichletbc(Q_bc_front, fem.locate_dofs_geometrical(self.FS, lambda x: np.isclose(x[1],self.dims[1])))
@@ -369,14 +402,15 @@ class RelaxationQij3DTensor(object):
         F3 = 0.5*self.L*(ufl.inner(ufl.grad(self.Q),ufl.grad(self.V)))*ufl.dx
         #F3 = -1*(ufl.inner(ufl.grad(Q),ufl.grad(V)))*ufl.dx
         # construct the residual
-        F = F1+F2+F3
+        #F = F1+F2+F3
+        F = F1+F3
 
         #Creating excpression for the Frank Free energy
         E_fn = fem.Expression(0.5*self.A*ufl.tr(self.Q*self.Q) + 
                               (self.B/3)*ufl.tr(self.Q*self.Q*self.Q) + 
                               0.25*self.C*ufl.tr(self.Q*self.Q)*ufl.tr(self.Q*self.Q) + 
                               0.5*self.L*ufl.inner(ufl.grad(self.Q),ufl.grad(self.Q)),self.energy_FS.element.interpolation_points())
-        E_fn = fem.Expression(0.5*self.L*ufl.inner(ufl.grad(self.Q),ufl.grad(self.Q)),self.energy_FS.element.interpolation_points())
+        E_fn = fem.Expression(0.5*self.L*ufl.inner(ufl.nabla_grad(self.Q),ufl.nabla_grad(self.Q)),self.energy_FS.element.interpolation_points())
         self.E = fem.Function(self.energy_FS)
         self.E.name = "E"
         self.E.interpolate(E_fn)
@@ -413,7 +447,7 @@ class RelaxationQij3DTensor(object):
         # Create nonlinear problem and Newton solver
         problem = fem.petsc.NonlinearProblem(F, self.Q, bcs_local)
         solver = nls.petsc.NewtonSolver(self.msh.comm, problem)
-        solver.convergence_criterion = "residual" #"incremental"
+        solver.convergence_criterion = "residual"
         solver.rtol = 1e-6
 
         # We can customize the linear solver used inside the NewtonSolver by
@@ -421,10 +455,11 @@ class RelaxationQij3DTensor(object):
         ksp = solver.krylov_solver
         opts = PETSc.Options()
         option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"
-        opts[f"{option_prefix}pc_type"] = "lu"
-        ksp.setFromOptions()
 
+        opts[f"{option_prefix}ksp_type"] = "gmres" #gmres, cg, preonly (gmres)
+        opts[f"{option_prefix}pc_type"] = "gamg" #lu,cholesky #gamg=geometric algebraic multigrid (gamg)
+        opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps" #superlu_dist,superlu,mumps (mumps/superlu_dist)
+        ksp.setFromOptions()
         #step in time
         print("Init done")
         self.t_bc = fem.Constant(self.msh, PETSc.ScalarType(0.0))
@@ -480,7 +515,8 @@ class RelaxationQij3DTensor(object):
         if (self.isave[0]):
             print("converting Q-tensor to director field")
             path = "./data/"+self.sim_name+"/"
-            qij_io.vtk_eig(path,Q_file_name,self.nsteps)
+            qij_io.vtk_eig2(path,Q_file_name,self.nsteps)
+            qij_io.vtk_biax(path,Q_file_name,self.nsteps)
 
 class RelaxationQij3DMixed(object):
     pass
